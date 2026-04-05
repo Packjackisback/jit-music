@@ -23,7 +23,7 @@ HAND_CONNECTIONS = [
 ]
 
 
-def draw_landmarks(frame, coords):
+def draw_landmarks(frame, coords, color):
     h, w = frame.shape[:2]
 
     points = []
@@ -33,7 +33,7 @@ def draw_landmarks(frame, coords):
         points.append((px, py))
 
     for i, j in HAND_CONNECTIONS:
-        cv2.line(frame, points[i], points[j], (80, 220, 80), 2, cv2.LINE_AA)
+        cv2.line(frame, points[i], points[j], color, 2, cv2.LINE_AA)
 
     for px, py in points:
         cv2.circle(frame, (px, py), 4, (60, 170, 255), -1, cv2.LINE_AA)
@@ -73,7 +73,7 @@ def main():
     options = mp_vision.HandLandmarkerOptions(
         base_options=base_options,
         running_mode=mp_vision.RunningMode.VIDEO,
-        num_hands=1,
+        num_hands=2,
         min_hand_detection_confidence=0.5,
         min_hand_presence_confidence=0.5,
         min_tracking_confidence=0.5,
@@ -102,21 +102,36 @@ def main():
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
             preview = frame.copy()
+            hands = []
 
             if result.hand_landmarks:
-                hand = result.hand_landmarks[0]
-                coords = [[lm.x, lm.y] for lm in hand]
-                draw_landmarks(preview, coords)
-                draw_status(preview, "Hand detected", (80, 220, 80))
+                for idx, hand in enumerate(result.hand_landmarks):
+                    coords = [[lm.x, lm.y] for lm in hand]
+                    handedness = None
+                    if result.handedness and idx < len(result.handedness):
+                        handedness = result.handedness[idx][0].category_name
+
+                    hands.append(
+                        {
+                            "landmarks": coords,
+                            "handedness": handedness,
+                        }
+                    )
+
+                    color = (80, 220, 80) if idx == 0 else (255, 170, 70)
+                    draw_landmarks(preview, coords, color)
+
+                draw_status(preview, f"{len(hands)} hand(s) detected", (80, 220, 80))
             else:
-                coords = None
+                hands = []
                 draw_status(preview, "No hand detected", (180, 180, 180))
 
             preview_b64 = make_stream_preview(preview)
             line = json.dumps(
                 {
                     "frame_id": frame_id,
-                    "landmarks": coords,
+                    "hands": hands,
+                    "landmarks": hands[0]["landmarks"] if hands else None,
                     "preview_jpeg_b64": preview_b64,
                 }
             )

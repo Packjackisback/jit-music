@@ -9,11 +9,17 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use crate::gesture::Landmarks;
 
-type SharedLandmarks = Arc<Mutex<Option<Landmarks>>>;
+#[derive(Clone)]
+pub struct TrackedHand {
+    pub landmarks: Landmarks,
+    pub handedness: Option<String>,
+}
+
+type SharedHands = Arc<Mutex<Option<Vec<TrackedHand>>>>;
 type SharedPreview = Arc<Mutex<Option<(u64, Vec<u8>)>>>;
 
 pub struct HandTracker {
-    latest: SharedLandmarks,
+    latest: SharedHands,
     latest_preview: SharedPreview,
     _child: Child,
 }
@@ -34,7 +40,7 @@ impl HandTracker {
             .take()
             .expect("Failed to capture tracker.py stdout");
 
-        let latest: SharedLandmarks = Arc::new(Mutex::new(None));
+        let latest: SharedHands = Arc::new(Mutex::new(None));
         let latest_preview: SharedPreview = Arc::new(Mutex::new(None));
         let latest_clone = latest.clone();
         let latest_preview_clone = latest_preview.clone();
@@ -47,10 +53,10 @@ impl HandTracker {
                     Err(e) => { eprintln!("[tracker] read error: {e}"); break; }
                 };
 
-                if let Some((landmarks, preview)) = parse_line(&line) {
-                    if let Some(parsed_landmarks) = landmarks {
+                if let Some((hands, preview)) = parse_line(&line) {
+                    if let Some(parsed_hands) = hands {
                         if let Ok(mut guard) = latest_clone.lock() {
-                            *guard = Some(parsed_landmarks);
+                            *guard = Some(parsed_hands);
                         }
                     }
 
@@ -67,7 +73,7 @@ impl HandTracker {
         HandTracker { latest, latest_preview, _child: child }
     }
 
-    pub fn latest_landmarks(&self) -> Option<Landmarks> {
+    pub fn latest_hands(&self) -> Option<Vec<TrackedHand>> {
         self.latest.lock().ok()?.clone()
     }
 
@@ -76,18 +82,18 @@ impl HandTracker {
     }
 }
 
-fn parse_line(line: &str) -> Option<(Option<Landmarks>, Option<(u64, Vec<u8>)>)> {
+fn parse_line(line: &str) -> Option<(Option<Vec<TrackedHand>>, Option<(u64, Vec<u8>)>)> {
     if line.is_empty() { return None; }
 
     let v: serde_json::Value = serde_json::from_str(line).ok()?;
-    let landmarks = parse_landmarks(&v);
+    let hands = parse_hands(&v);
     let preview = parse_preview(&v);
 
-    Some((landmarks, preview))
+    Some((hands, preview))
 }
 
-fn parse_landmarks(v: &serde_json::Value) -> Option<Landmarks> {
-    let arr = v["landmarks"].as_array()?;
+fn parse_landmarks_value(value: &serde_json::Value) -> Option<Landmarks> {
+    let arr = value.as_array()?;
     if arr.len() != 21 { return None; }
 
     let mut landmarks = [[0f32; 2]; 21];
@@ -100,6 +106,28 @@ fn parse_landmarks(v: &serde_json::Value) -> Option<Landmarks> {
     }
 
     Some(landmarks)
+}
+
+fn parse_hands(v: &serde_json::Value) -> Option<Vec<TrackedHand>> {
+    if let Some(hands) = v["hands"].as_array() {
+        let mut parsed = Vec::new();
+
+        for hand in hands {
+            let landmarks = parse_landmarks_value(hand.get("landmarks")?)?;
+            let handedness = hand
+                .get("handedness")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned);
+            parsed.push(TrackedHand { landmarks, handedness });
+        }
+
+        if !parsed.is_empty() {
+            return Some(parsed);
+        }
+    }
+
+    let landmarks = parse_landmarks_value(v.get("landmarks")?)?;
+    Some(vec![TrackedHand { landmarks, handedness: None }])
 }
 
 fn parse_preview(v: &serde_json::Value) -> Option<(u64, Vec<u8>)> {
