@@ -69,4 +69,11 @@ Because of that, I'm going to just do volume = palm horizontal, pitch = vertical
 
 ## Postmortem
 
-This is suprisingly easy to do. Ort makes this really painless, and I'm interested in doing more things with it. Currently, getting the number of fingers extended is insanely buggy, and it seems like the landmark model just isn't accurate enough. I'm not sure if it is a consequence of what i'm passing it, but I think it just isn't the most accurate model. The obvious solution is to switch to mediapipe, either through the cpp/python bindings, or this: https://github.com/julesyoungberg/mediapipe-rs. 
+This is suprisingly easy to do. Ort makes this really painless, and I'm interested in doing more things with it. Currently, getting the number of fingers extended is insanely buggy, and it seems like the landmark model just isn't accurate enough. I'm not sure if it is a consequence of what i'm passing it, but I think it just isn't the most accurate model. The obvious solution is to switch to mediapipe, either through the cpp/python bindings, or this: https://github.com/julesyoungberg/mediapipe-rs.
+
+
+# Round 2
+
+mediapipe-rs is just not a good solution in this case. Instead, I'm going to have to use the python binding :hs:
+
+For simplicity's sake, I switched the camera logic to the python part of the project

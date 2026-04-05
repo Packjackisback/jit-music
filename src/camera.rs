@@ -10,29 +10,27 @@ use std::sync::{
 };
 
 pub struct CameraCapture {
-    latest: Arc<Mutex<Option<DynamicImage>>>,
+    latest:  Arc<Mutex<Option<DynamicImage>>>,
     running: Arc<AtomicBool>,
     _thread: std::thread::JoinHandle<()>,
 }
 
 impl CameraCapture {
     pub fn new() -> Self {
-        let latest: Arc<Mutex<Option<DynamicImage>>> = Arc::new(Mutex::new(None));
-        let running = Arc::new(AtomicBool::new(true));
- 
-        let latest_clone = latest.clone();
+        let latest:  Arc<Mutex<Option<DynamicImage>>> = Arc::new(Mutex::new(None));
+        let running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+
+        let latest_clone  = latest.clone();
         let running_clone = running.clone();
- 
+
         let thread = std::thread::spawn(move || {
             let format = RequestedFormat::new::<RgbFormat>(
                 RequestedFormatType::AbsoluteHighestResolution,
             );
             let mut camera = Camera::new(CameraIndex::Index(0), format)
-                .expect(
-                    "Could not open webcam.",
-                );
+                .expect("Could not open webcam");
             camera.open_stream().expect("Failed to open camera stream");
- 
+
             while running_clone.load(Ordering::Relaxed) {
                 match camera.frame() {
                     Ok(buffer) => {
@@ -43,7 +41,7 @@ impl CameraCapture {
                                     rgb.height(),
                                     rgb.into_raw(),
                                 )
-                                .expect("Buffer size mismatch — this is a bug"),
+                                .expect("Buffer size mismatch"),
                             );
                             if let Ok(mut guard) = latest_clone.lock() {
                                 *guard = Some(dynamic);
@@ -57,19 +55,15 @@ impl CameraCapture {
                 }
             }
         });
- 
-        CameraCapture {
-            latest,
-            running,
-            _thread: thread,
-        }
+
+        CameraCapture { latest, running, _thread: thread }
     }
- 
+
     pub fn latest_frame(&self) -> Option<DynamicImage> {
         self.latest.lock().ok()?.clone()
     }
 }
- 
+
 impl Drop for CameraCapture {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);

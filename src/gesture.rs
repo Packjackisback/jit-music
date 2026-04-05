@@ -30,6 +30,34 @@ fn note_name(midi: i32) -> String {
     format!("{name}{octave}")
 }
 
+fn sq_dist(a: [f32; 2], b: [f32; 2]) -> f32 {
+    let dx = a[0] - b[0];
+    let dy = a[1] - b[1];
+    dx * dx + dy * dy
+}
+
+fn thumb_extended(lm: &Landmarks) -> bool {
+    let wrist = lm[0];
+    let thumb_ip = lm[3];
+    let thumb_tip = lm[4];
+    let index_mcp = lm[5];
+    let pinky_mcp = lm[17];
+
+    let palm_center = [
+        (wrist[0] + index_mcp[0] + pinky_mcp[0]) / 3.0,
+        (wrist[1] + index_mcp[1] + pinky_mcp[1]) / 3.0,
+    ];
+
+    // Scale margin by palm width so this stays stable across different hand sizes.
+    let palm_width = sq_dist(index_mcp, pinky_mcp).sqrt();
+    let margin = 0.03 * palm_width;
+
+    let tip_vs_ip_to_index = sq_dist(thumb_tip, index_mcp).sqrt() - sq_dist(thumb_ip, index_mcp).sqrt();
+    let tip_vs_ip_to_palm = sq_dist(thumb_tip, palm_center).sqrt() - sq_dist(thumb_ip, palm_center).sqrt();
+
+    tip_vs_ip_to_index > margin && tip_vs_ip_to_palm > margin
+}
+
 
 // I explain this in the planning doc
 fn count_extended_fingers(lm: &Landmarks) -> usize {
@@ -43,8 +71,7 @@ fn count_extended_fingers(lm: &Landmarks) -> usize {
         }
     }
  
-    // if its being weird switch this, i can't rmbr left vs right
-    if lm[4][0] < lm[3][0] {
+    if thumb_extended(lm) {
         count += 1;
     }
  
